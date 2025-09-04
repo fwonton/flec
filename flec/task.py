@@ -33,26 +33,25 @@ os.environ["HF_TOKEN"] = hf_token
 
 def load_data(partition_id: int, num_partitions: int, model_name: str):
     """Load partition data."""
-    dataset_initial_load = load_dataset("dylanfuan03/cleveland_hd", split = "train", token=True)
     
     # Only initialize `FederatedDataset` once
     global fds
     if fds is None:
         partitioner = IidPartitioner(num_partitions=num_partitions)
         fds = FederatedDataset(
-            dataset = "dylanfuan03/cleveland_hd",
+            dataset = "dylanfuan03/mimic_hd",
             partitioners={"train": partitioner},
             shuffle = True,
             )
     partition = fds.load_partition(partition_id)
     # Divide data: 80% train, 20% test
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
+    partition_train_test = partition.train_test_split(test_size=0.3, seed=42)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     def tokenize_function(examples):
         return tokenizer(
-            examples["text"], truncation=True, add_special_tokens=True, max_length=512
+            examples["text"], padding = True, truncation=True, add_special_tokens=True, max_length=512
         )
 
     partition_train_test = partition_train_test.map(tokenize_function, batched=True)
@@ -68,14 +67,14 @@ def load_data(partition_id: int, num_partitions: int, model_name: str):
     )
 
     testloader = DataLoader(
-        partition_train_test["test"], batch_size=4, collate_fn=data_collator
+        partition_train_test["test"], batch_size=16, collate_fn=data_collator
     )
 
     return trainloader, testloader
 
 
 def train(net, trainloader, epochs, device):
-    optimizer = AdamW(net.parameters(), lr=5e-5)
+    optimizer = AdamW(net.parameters(), lr=1e-5)
     net.train()
     for _ in range(epochs):
         for batch in trainloader:
@@ -87,21 +86,81 @@ def train(net, trainloader, epochs, device):
             optimizer.zero_grad()
 
 
+from evaluate import load as load_metric
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+
+
 def test(net, testloader, device):
-    metric = load_metric("accuracy")
-    loss = 0
+    accuracy_metric = load_metric("accuracy")
+    f1_metric = load_metric("f1")
+    
+    total_loss = 0.0
+    total_samples = 0
     net.eval()
+
+    false_positives = 0
+    false_negatives = 0
+
+    all_preds = []
+    all_labels = []
+
     for batch in testloader:
         batch = {k: v.to(device) for k, v in batch.items()}
         with torch.no_grad():
             outputs = net(**batch)
+        
         logits = outputs.logits
-        loss += outputs.loss.item()
+        loss = outputs.loss.item()
+        batch_size = batch["labels"].size(0)
+
+        total_loss += loss * batch_size
+        total_samples += batch_size
+
         predictions = torch.argmax(logits, dim=-1)
-        metric.add_batch(predictions=predictions, references=batch["labels"])
-    loss /= len(testloader.dataset)
-    accuracy = metric.compute()["accuracy"]
-    return loss, accuracy
+        accuracy_metric.add_batch(predictions=predictions, references=batch["labels"])
+        f1_metric.add_batch(predictions=predictions, references=batch["labels"])
+
+        # Count FP and FN
+        for i in range(batch_size):
+            true_label = batch["labels"][i].item()
+            pred_label = predictions[i].item()
+
+            if pred_label != true_label:
+                if pred_label == 1 and true_label == 0:
+                    false_positives += 1
+                elif pred_label == 0 and true_label == 1:
+                    false_negatives += 1
+        
+        predictions = torch.argmax(logits, dim=-1)
+        all_preds.extend(predictions.cpu().numpy())
+        all_labels.extend(batch["labels"].cpu().numpy())
+
+    avg_loss = total_loss / total_samples
+    accuracy = accuracy_metric.compute()["accuracy"]
+    f1 = f1_metric.compute(average="weighted")["f1"]
+
+    cm = confusion_matrix(all_labels, all_preds, labels=[0,1])
+
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=[0,1], yticklabels=[0,1])
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.title("Confusion Matrix (Aggregated)")
+    plt.show()
+
+
+    return avg_loss, total_samples, {
+        "accuracy": float(accuracy),
+        "f1": float(f1),
+        "loss": float(avg_loss),
+        "preds": all_preds,
+        "labels": all_labels,
+        "false_positives": int(false_positives),
+        "false_negatives": int(false_negatives),
+    }
 
 
 def get_weights(net):

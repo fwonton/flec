@@ -30,19 +30,19 @@ class FlowerClient(NumPyClient):
 
         # Evaluate on validation/test data
         with torch.no_grad():
-            loss, accuracy = test(self.net, self.testloader, self.device)
+            loss, num_samples, metrics = test(self.net, self.testloader, self.device)
 
         torch.cuda.empty_cache()
         gc.collect()
 
-        return get_weights(self.net), len(self.trainloader), {"accuracy": accuracy}
+        return get_weights(self.net), len(self.trainloader), metrics
 
     
     def evaluate(self, parameters, config):
         set_weights(self.net, parameters)
         with torch.no_grad():
-            loss, accuracy = test(self.net, self.testloader, self.device)
-        return float(loss), len(self.testloader), {"accuracy": accuracy}
+            loss, num_samples, metrics = test(self.net, self.testloader, self.device)
+        return float(loss), num_samples, metrics
 
 
 

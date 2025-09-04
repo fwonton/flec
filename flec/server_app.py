@@ -7,6 +7,7 @@ from transformers import AutoModelForSequenceClassification
 
 from flec.task import get_weights
 
+
 from dotenv import load_dotenv
 import os
 
@@ -29,16 +30,36 @@ def aggregate_fit_metrics(metrics_list):
 def aggregate_eval_metrics(metrics_list):
     total_examples = 0
     weighted_accuracy_sum = 0.0
+    weighted_f1_sum = 0.0
+    weighted_loss_sum = 0.0
+
+
+    total_false_positives = 0
+    total_false_negatives = 0
+
+
     print("Received evaluation metrics:", metrics_list)  # Debug line
+
     for num_examples, metrics in metrics_list:
-        if "accuracy" in metrics:
-            total_examples += num_examples
-            weighted_accuracy_sum += num_examples * metrics["accuracy"]
+        total_examples += num_examples
+        weighted_accuracy_sum += num_examples * metrics.get("accuracy", 0.0)
+        weighted_f1_sum += num_examples * metrics.get("f1", 0.0)
+        weighted_loss_sum += num_examples * metrics.get("loss", 0.0)
+        total_false_positives += metrics.get("false_positives", 0)
+        total_false_negatives += metrics.get("false_negatives", 0)
+
 
     if total_examples == 0:
-        return {"accuracy": 0.0}
+        return {"accuracy": 0.0, "f1": 0.0, "loss": 0.0, "false_positives": 0, "false_negatives": 0, "confusion_matrix":None}
 
-    return {"accuracy": weighted_accuracy_sum / total_examples}
+
+    return {
+        "accuracy": float(weighted_accuracy_sum / total_examples),
+        "f1": float(weighted_f1_sum / total_examples),
+        "loss": float(weighted_loss_sum / total_examples),
+        "false_positives": int(total_false_positives),
+        "false_negatives": int(total_false_negatives)
+    }
 
 
 def server_fn(context: Context):

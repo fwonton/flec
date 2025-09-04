@@ -166,3 +166,4 @@ cython_debug/
 #Personal
 run_in_terminal.py
 SingleTrainTest.py
+results
