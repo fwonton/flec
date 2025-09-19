@@ -28,8 +28,8 @@ serverapp = "flec.server_app:app"
 clientapp = "flec.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 10
-fraction-fit = 0.1
+num-server-rounds = 8
+fraction-fit = 0.2
 local-epochs = 2
 model-name = "allenai/biomed_roberta_base" # Set a larger model if you have access to more GPU resources
 num-labels = 2
@@ -38,9 +38,9 @@ num-labels = 2
 default = "localhost"
 
 [tool.flwr.federations.localhost]
-options.num-supernodes = 3
+options.num-supernodes = 2
 
 [tool.flwr.federations.localhost-gpu]
-options.num-supernodes = 3
+options.num-supernodes = 2
 options.backend.client-resources.num-cpus = 1 # each ClientApp assumes to use 4CPUs
 options.backend.client-resources.num-gpus = 0.5 # at most 4 ClientApps will run in a given GPU

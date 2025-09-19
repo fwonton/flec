@@ -45,7 +45,7 @@ def load_data(partition_id: int, num_partitions: int, model_name: str):
             )
     partition = fds.load_partition(partition_id)
     # Divide data: 80% train, 20% test
-    partition_train_test = partition.train_test_split(test_size=0.3, seed=42)
+    partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -74,7 +74,7 @@ def load_data(partition_id: int, num_partitions: int, model_name: str):
 
 
 def train(net, trainloader, epochs, device):
-    optimizer = AdamW(net.parameters(), lr=1e-5)
+    optimizer = AdamW(net.parameters(), lr=1e-6)
     net.train()
     for _ in range(epochs):
         for batch in trainloader:
@@ -104,6 +104,8 @@ def test(net, testloader, device):
 
     false_positives = 0
     false_negatives = 0
+    true_positives = 0
+    true_negatives = 0
 
     all_preds = []
     all_labels = []
@@ -134,6 +136,10 @@ def test(net, testloader, device):
                     false_positives += 1
                 elif pred_label == 0 and true_label == 1:
                     false_negatives += 1
+            elif pred_label == 1 and true_label == 1:
+                true_positives += 1 
+            elif pred_label == 0 and true_label == 0:
+                true_negatives += 1 
         
         predictions = torch.argmax(logits, dim=-1)
         all_preds.extend(predictions.cpu().numpy())
@@ -143,23 +149,23 @@ def test(net, testloader, device):
     accuracy = accuracy_metric.compute()["accuracy"]
     f1 = f1_metric.compute(average="weighted")["f1"]
 
-    cm = confusion_matrix(all_labels, all_preds, labels=[0,1])
+    '''cm = confusion_matrix(all_labels, all_preds, labels=[0,1])
 
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=[0,1], yticklabels=[0,1])
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
     plt.title("Confusion Matrix (Aggregated)")
-    plt.show()
+    plt.show()'''
 
 
     return avg_loss, total_samples, {
         "accuracy": float(accuracy),
         "f1": float(f1),
         "loss": float(avg_loss),
-        "preds": all_preds,
-        "labels": all_labels,
         "false_positives": int(false_positives),
         "false_negatives": int(false_negatives),
+        "true_positives": int(true_positives),
+        "true_negatives": int(true_negatives)
     }
 
 

@@ -167,3 +167,8 @@ cython_debug/
 run_in_terminal.py
 SingleTrainTest.py
 results
+NLP_Bennett.py
+post_null_fixed.csv
+flec/graphing.py
+global_model_final/model.safetensors
+global_model_final/config.json
