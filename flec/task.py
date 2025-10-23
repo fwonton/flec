@@ -74,7 +74,7 @@ def load_data(partition_id: int, num_partitions: int, model_name: str):
 
 
 def train(net, trainloader, epochs, device):
-    optimizer = AdamW(net.parameters(), lr=5e-6, weight_decay=0.01)
+    optimizer = AdamW(net.parameters(), lr=5e-6)
     net.train()
     for _ in range(epochs):
         for batch in trainloader:
